@@ -902,6 +902,35 @@ const API = {
         }
     },
 
+    // 获取真实的图片URL(不通过代理,用于palette等服务)
+    getRealPicUrl: async (song) => {
+        const picUrl = API.getPicUrl(song);
+        const absolutePicUrl = toAbsoluteUrl(picUrl);  // 先转为绝对URL
+
+        try {
+            const response = await fetch(absolutePicUrl, {
+                method: 'HEAD',
+                redirect: 'manual'
+            });
+
+            // 检查是否是重定向响应
+            if (response.status >= 300 && response.status < 400) {
+                const location = response.headers.get('Location');
+                if (location) {
+                    // Location可能是相对或绝对URL,统一处理
+                    const realUrl = new URL(location, absolutePicUrl).href;
+                    return preferHttpsUrl(realUrl);  // 转换为HTTPS
+                }
+            }
+
+            // 如果不是重定向,返回代理URL的绝对路径
+            return preferHttpsUrl(absolutePicUrl);
+        } catch (error) {
+            console.warn("获取真实图片URL失败,使用代理URL:", error);
+            return preferHttpsUrl(absolutePicUrl);  // 失败时返回代理URL的绝对路径
+        }
+    },
+
     getLyric: (song) => {
         const signature = API.generateSignature();
         return `${API.baseUrl}?type=lrc&id=${song.lyric_id || song.id}&source=${song.source || "netease"}&s=${signature}`;
@@ -3529,14 +3558,22 @@ function updateCurrentSongInfo(song, options = {}) {
 
         // Load the image
         img.crossOrigin = "anonymous";
-        img.onload = () => {
+        img.onload = async () => {
             if (state.currentSong !== song) {
                 return;
             }
             setAlbumCoverImage(absoluteImageUrl);
-            const shouldApplyImmediately = paletteCache.has(absoluteImageUrl) ||
-                (state.currentPaletteImage === absoluteImageUrl && state.dynamicPalette);
-            scheduleDeferredPaletteUpdate(absoluteImageUrl, { immediate: shouldApplyImmediately });
+
+            // 为palette获取真实的图片URL(而不是proxy重定向)
+            try {
+                const realPicUrl = await API.getRealPicUrl(song);
+                const shouldApplyImmediately = paletteCache.has(realPicUrl) ||
+                    (state.currentPaletteImage === realPicUrl && state.dynamicPalette);
+                scheduleDeferredPaletteUpdate(realPicUrl, { immediate: shouldApplyImmediately });
+            } catch (error) {
+                console.warn("获取真实图片URL失败,跳过调色板:", error);
+                // 失败时不更新背景,保持当前背景
+            }
         };
         img.onerror = () => {
             if (state.currentSong !== song) {
