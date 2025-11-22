@@ -5256,24 +5256,33 @@ async function playSong(song, options = {}) {
         debugLog(`正在获取真实音频URL: ${song.name}, 音质: ${quality}`);
 
         let realAudioUrl;
-        try {
-            realAudioUrl = await API.getRealAudioUrl(song, quality);
-            debugLog(`获取到真实音频URL: ${realAudioUrl}`);
+        let useProxy = false;
 
-            // 将HTTP URL转换为HTTPS，避免混合内容错误
-            realAudioUrl = preferHttpsUrl(realAudioUrl);
-            debugLog(`转换为HTTPS URL: ${realAudioUrl}`);
-        } catch (error) {
-            console.error("获取真实音频URL失败,回退到代理模式:", error);
-            // 如果获取真实URL失败,回退到使用代理URL
+        // 酷我音乐的HTTPS证书有问题,直接使用代理模式
+        if (song.source === 'kuwo') {
+            debugLog('酷我音乐检测到HTTPS证书问题,使用代理模式');
             realAudioUrl = API.getSongUrl(song, quality);
-            debugLog(`回退到代理URL: ${realAudioUrl}`);
+            useProxy = true;
+        } else {
+            try {
+                realAudioUrl = await API.getRealAudioUrl(song, quality);
+                debugLog(`获取到真实音频URL: ${realAudioUrl}`);
+
+                // 将HTTP URL转换为HTTPS，避免混合内容错误
+                realAudioUrl = preferHttpsUrl(realAudioUrl);
+                debugLog(`转换为HTTPS URL: ${realAudioUrl}`);
+            } catch (error) {
+                console.error("获取真实音频URL失败,回退到代理模式:", error);
+                // 如果获取真实URL失败,回退到使用代理URL
+                realAudioUrl = API.getSongUrl(song, quality);
+                useProxy = true;
+                debugLog(`回退到代理URL: ${realAudioUrl}`);
+            }
         }
 
-        // 使用真实URL作为音频源
+        // 使用真实URL或代理URL作为音频源
         const candidateAudioUrls = [realAudioUrl];
-        debugLog(`候选音频URL: ${candidateAudioUrls.join(', ')}`);
-
+        debugLog(`候选音频URL: ${candidateAudioUrls.join(', ')}${useProxy ? ' (代理模式)' : ''}`);
 
         state.currentSong = song;
         const primaryAudioUrl = candidateAudioUrls[0];
