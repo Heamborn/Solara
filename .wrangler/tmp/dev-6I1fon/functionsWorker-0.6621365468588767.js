@@ -1738,14 +1738,24 @@ async function onRequest2({ request }) {
     return cachedResponse;
   }
   let finalImageUrl = target.toString();
-  if (target.pathname.includes("/proxy") && target.searchParams.get("type") === "pic") {
+  const isProxyUrl = target.pathname === "/proxy" && target.searchParams.get("type") === "pic";
+  console.log("Palette processing:", {
+    originalUrl: target.toString(),
+    pathname: target.pathname,
+    typeParam: target.searchParams.get("type"),
+    isProxyUrl
+  });
+  if (isProxyUrl) {
     try {
+      console.log("Resolving proxy redirect...");
       const redirectResponse = await fetch(target.toString(), {
         redirect: "manual"
       });
       const location = redirectResponse.headers.get("Location");
+      console.log("Redirect location:", location);
       if (location) {
         finalImageUrl = location;
+        console.log("Using real image URL:", finalImageUrl);
       }
     } catch (error) {
       console.warn("Failed to resolve proxy redirect, using original URL", error);

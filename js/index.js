@@ -910,6 +910,21 @@ const API = {
     getPicUrl: (song) => {
         const signature = API.generateSignature();
         return `${API.baseUrl}?type=pic&id=${song.pic_id || song.id}&source=${song.source || "netease"}&s=${signature}`;
+    },
+
+    // 获取真实的图片URL(用于palette)
+    getRealPicUrl: async (song) => {
+        const proxyUrl = API.getPicUrl(song);
+        try {
+            const response = await fetch(proxyUrl, { redirect: 'manual' });
+            const location = response.headers.get('Location');
+            if (location) {
+                return location;
+            }
+        } catch (error) {
+            console.warn("获取真实图片URL失败,使用proxy URL:", error);
+        }
+        return proxyUrl;
     }
 
 };
@@ -3529,14 +3544,19 @@ function updateCurrentSongInfo(song, options = {}) {
 
         // Load the image
         img.crossOrigin = "anonymous";
-        img.onload = () => {
+        img.onload = async () => {
             if (state.currentSong !== song) {
                 return;
             }
             setAlbumCoverImage(absoluteImageUrl);
-            const shouldApplyImmediately = paletteCache.has(absoluteImageUrl) ||
-                (state.currentPaletteImage === absoluteImageUrl && state.dynamicPalette);
-            scheduleDeferredPaletteUpdate(absoluteImageUrl, { immediate: shouldApplyImmediately });
+
+            // 获取真实图片URL用于palette
+            const realPicUrl = await API.getRealPicUrl(song);
+            const absoluteRealPicUrl = toAbsoluteUrl(preferHttpsUrl(realPicUrl));
+
+            const shouldApplyImmediately = paletteCache.has(absoluteRealPicUrl) ||
+                (state.currentPaletteImage === absoluteRealPicUrl && state.dynamicPalette);
+            scheduleDeferredPaletteUpdate(absoluteRealPicUrl, { immediate: shouldApplyImmediately });
         };
         img.onerror = () => {
             if (state.currentSong !== song) {
