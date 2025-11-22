@@ -396,9 +396,25 @@ export async function onRequest({ request }: { request: Request }): Promise<Resp
     return cachedResponse;
   }
 
+  // 如果URL包含/proxy?type=pic,先获取真实图片URL
+  let finalImageUrl = target.toString();
+  if (target.pathname.includes("/proxy") && target.searchParams.get("type") === "pic") {
+    try {
+      const redirectResponse = await fetch(target.toString(), {
+        redirect: "manual",
+      });
+      const location = redirectResponse.headers.get("Location");
+      if (location) {
+        finalImageUrl = location;
+      }
+    } catch (error) {
+      console.warn("Failed to resolve proxy redirect, using original URL", error);
+    }
+  }
+
   let upstream: Response;
   try {
-    upstream = await fetch(target.toString(), {
+    upstream = await fetch(finalImageUrl, {
       cf: {
         cacheTtl: 3600,
         cacheEverything: true,
@@ -413,7 +429,7 @@ export async function onRequest({ request }: { request: Request }): Promise<Resp
     });
   } catch (error) {
     console.warn("Image resizing fetch failed, falling back to original", error);
-    upstream = await fetch(target.toString(), {
+    upstream = await fetch(finalImageUrl, {
       cf: {
         cacheTtl: 3600,
         cacheEverything: true,
