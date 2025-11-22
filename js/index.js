@@ -5259,6 +5259,10 @@ async function playSong(song, options = {}) {
         try {
             realAudioUrl = await API.getRealAudioUrl(song, quality);
             debugLog(`获取到真实音频URL: ${realAudioUrl}`);
+
+            // 将HTTP URL转换为HTTPS，避免混合内容错误
+            realAudioUrl = preferHttpsUrl(realAudioUrl);
+            debugLog(`转换为HTTPS URL: ${realAudioUrl}`);
         } catch (error) {
             console.error("获取真实音频URL失败,回退到代理模式:", error);
             // 如果获取真实URL失败,回退到使用代理URL
